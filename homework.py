@@ -1,6 +1,8 @@
 import logging
 import os
 import time
+from http.client import OK
+from urllib.error import HTTPError
 
 import requests
 import telegram
@@ -46,9 +48,13 @@ def get_api_answer(current_timestamp):
     params = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-        response.raise_for_status()
+        # response.raise_for_status()
     except requests.HTTPError as error:
         logger.error(f'Ошибка запроса к API {error}')
+    if response.status_code != OK:
+        error_msg = 'Сбой запроса к API'
+        logger.error(error_msg)
+        raise HTTPError(error_msg)
     return response.json()
 
 
@@ -66,6 +72,10 @@ def check_response(response):
         raise exceptions.CheckResponseException(error_msg)
     if len(homeworks_list) == 0:
         error_msg = 'За последнее время нет домашек'
+        logger.error(error_msg)
+        raise exceptions.CheckResponseException(error_msg)
+    if not isinstance(homeworks_list, list):
+        error_msg = 'В ответе API домашки представлены не списком'
         logger.error(error_msg)
         raise exceptions.CheckResponseException(error_msg)
     return homeworks_list
