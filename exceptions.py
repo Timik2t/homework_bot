@@ -1,18 +1,9 @@
-class CheckResponseException(Exception):
-    """Неверный формат ответа API."""
+class NotNewHomeworksError(Exception):
+    """Нет домашки."""
     pass
 
 
-class UnknownStatusException(Exception):
-    """Исключение неизвестного статуса домашки."""
+class InternalServerError(Exception):
+    """Ошибка ответа сервера."""
     pass
 
-
-class MissingTokenException(Exception):
-    """Нет нужных переменных среды."""
-    pass
-
-
-class IncorrectAPIResponseException(Exception):
-    """Исключение некорректного ответа API."""
-    pass
