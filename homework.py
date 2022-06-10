@@ -174,7 +174,7 @@ def main():
                 send_message(bot, message)
             else:
                 logger.debug(PRE_HW_STATUS_LOG_MSG)
- 
+
         except Exception as error:
             message = str(error)
             if str(error) != pre_error:
