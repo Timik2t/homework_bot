@@ -11,9 +11,6 @@ import exceptions
 
 load_dotenv()
 
-DEBUG_BOT = True
-DEBUG_SERVER_BOT = False
-
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
@@ -132,13 +129,16 @@ def parse_status(homework):
 
 
 TOKENS_MISSING_MSG = 'Отсутствует необходимая переменная среды {name}'
+TOKENS = ['TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID', 'PRACTICUM_TOKEN']
 
 
 def check_tokens():
     """Проверка переменных окружения."""
-    for name in ['TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID', 'PRACTICUM_TOKEN']:
-        if globals()[name] is None:
-            raise KeyError(TOKENS_MISSING_MSG.format(name=name))
+    for name in TOKENS:
+        if not globals()[name]:
+            logger.error(TOKENS_MISSING_MSG.format(name=name))
+            return False
+    return True
 
 
 HW_MISSING_MSG = 'За последнее время нет домашек'
@@ -151,11 +151,13 @@ def is_homework(homeworks):
 
 
 PRE_HW_STATUS_LOG_MSG = 'Статус проверки домашки прежний'
+CHECK_TOKENS_MISSING_MSG = 'Отсутствует необходимая переменная среды'
 
 
 def main():
     """Основная логика работы бота."""
-    check_tokens()
+    if not check_tokens():
+        raise ValueError(CHECK_TOKENS_MISSING_MSG)
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
     pre_status = None
@@ -192,4 +194,4 @@ if __name__ == '__main__':
         handlers=[logging.FileHandler(__file__ + ".log"),
                   logging.StreamHandler()]
     )
-main()
+    main()
