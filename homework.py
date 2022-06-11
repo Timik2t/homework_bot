@@ -168,8 +168,9 @@ def main():
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
             homework_status = is_homework(homeworks)
-            if not homework_status:
+            if not homework_status and homework_status != pre_status:
                 send_message(bot, HW_MISSING)
+                pre_status = homework_status
             elif homework_status != pre_status:
                 send_message(bot, parse_status(homeworks[0]))
                 pre_status = homework_status
