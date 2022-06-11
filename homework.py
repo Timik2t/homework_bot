@@ -28,24 +28,23 @@ VERDICTS = {
 
 logger = logging.getLogger(__name__)
 
-SEND_MSG_INFO = 'Сообщение: "{message}" отправлено в чат'
+SEND_INFO = 'Сообщение: "{message}" отправлено в чат'
 
 
 def send_message(bot, message):
     """Отправка сообщения в чат."""
     bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    logger.info(SEND_MSG_INFO.format(message=message))
+    logger.info(SEND_INFO.format(message=message))
 
 
 SERVER_ERROR_INFORMATION = ['code', 'error']
-RESPONSE_ERROR_MSG = (
-    'Cбой запроса статус: {response}, '
-    'параметры запроса: {endpoint}, {params}'
+RESPONSE_ERROR = (
+    'Cбой запроса: {error}, '
+    'параметры запроса: {endpoint}, {params}, {headers}'
 )
-SERVER_ERROR_MSG = (
-    'Cбой запроса статус: {response}, '
-    'параметры запроса: {endpoint}, {params}, '
-    'ошибка: {error}'
+SERVER_ERROR = (
+    'Cбой запроса: {error}, {key}, '
+    'параметры запроса: {endpoint}, {params}, {headers} '
 )
 
 
@@ -57,58 +56,57 @@ def get_api_answer(current_timestamp):
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
         # response.raise_for_status()
     except requests.exceptions.RequestException as error:
-        raise error(RESPONSE_ERROR_MSG.format(
-            response=response,
+        raise ValueError(RESPONSE_ERROR.format(
+            error=error,
             endpoint=ENDPOINT,
+            headers=HEADERS,
             params=params)
         )
     if response.status_code != OK:
-        raise requests.ConnectionError(RESPONSE_ERROR_MSG.format(
-            response=response,
+        raise ValueError(RESPONSE_ERROR.format(
+            error=response.status_code,
             endpoint=ENDPOINT,
+            headers=HEADERS,
             params=params)
         )
     api_answer = response.json()
     for key in SERVER_ERROR_INFORMATION:
         if key in api_answer:
-            raise exceptions.InternalServerError(SERVER_ERROR_MSG.format(
-                response=response,
+            raise exceptions.InternalServerError(SERVER_ERROR.format(
+                key=key,
                 endpoint=ENDPOINT,
+                headers=HEADERS,
                 params=params,
-                error=api_answer[str(key)]
+                error=api_answer[key]
             ))
     return api_answer
 
 
-ENDPOINT_RESOURCE = 'homeworks'
-NOT_DICT_MSG = 'API вернул {response}, тип {type} не являющемся обьектом dict'
-NOT_LIST_MSG = 'API вернул {homeworks}, тип {type} не являющемся обьектом list'
-ENDPOINT_MISSING_ERROR_MSG = f'В ответе API нет ключа {ENDPOINT_RESOURCE}'
+NOT_DICT = 'API вернул {response}, тип {type} не являющемся обьектом dict'
+NOT_LIST = 'API вернул {homeworks}, тип {type} не являющемся обьектом list'
+ENDPOINT_MISSING_ERROR = f'В ответе API нет ключа "homeworks"'
 
 
 def check_response(response):
     """Проверяет ответ API."""
     if not isinstance(response, dict):
-        raise TypeError(NOT_DICT_MSG.format(
+        raise TypeError(NOT_DICT.format(
             response=response,
             type=type(response)
         ))
-    if ENDPOINT_RESOURCE not in response:
-        raise KeyError(ENDPOINT_MISSING_ERROR_MSG)
+    if "homeworks" not in response:
+        raise KeyError(ENDPOINT_MISSING_ERROR)
     homeworks = response['homeworks']
     if not isinstance(homeworks, list):
-        raise TypeError(NOT_LIST_MSG.format(
+        raise TypeError(NOT_LIST.format(
             homeworks=homeworks,
             type=type(homeworks)
         ))
     return homeworks
 
 
-HW_STATUS_MISSING_MSG = (
-    'Ожидались статусы: {status}, '
-    'пришел: {response_ststus}'
-)
-PARSE_STATUS_MSG = (
+HW_STATUS_MISSING = 'Неизвестный статус проверки: {response_ststus}'
+PARSE_STATUS = (
     'Изменился статус проверки работы "{homework_name}". '
     '{status}')
 
@@ -118,46 +116,48 @@ def parse_status(homework):
     homework_name = homework['homework_name']
     homework_status = homework['status']
     if homework_status not in VERDICTS:
-        raise KeyError(HW_STATUS_MISSING_MSG.format(
-            status=VERDICTS.keys(),
-            response_ststus=homework_status
-        ))
-    return (PARSE_STATUS_MSG.format(
-            homework_name=homework_name,
-            status=VERDICTS[homework_status]
-            ))
+        raise ValueError(
+            HW_STATUS_MISSING.format(response_ststus=homework_status)
+        )
+    return PARSE_STATUS.format(
+        homework_name=homework_name,
+        status=VERDICTS[homework_status]
+    )
 
 
-TOKENS_MISSING_MSG = 'Отсутствует необходимая переменная среды {name}'
+TOKENS_MISSING = 'Отсутствует необходимая переменная среды {name}'
 TOKENS = ['TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID', 'PRACTICUM_TOKEN']
 
 
 def check_tokens():
     """Проверка переменных окружения."""
+    missing_tokens = []
     for name in TOKENS:
         if not globals()[name]:
-            logger.error(TOKENS_MISSING_MSG.format(name=name))
-            return False
+            missing_tokens.append(name)
+    if len(missing_tokens) != 0:
+        logger.error(TOKENS_MISSING.format(name=missing_tokens))
+        return False
     return True
 
 
-HW_MISSING_MSG = 'За последнее время нет домашек'
+HW_MISSING = 'За последнее время нет домашек'
 
 
 def is_homework(homeworks):
     """Проверка есть ли домашка."""
     if len(homeworks) == 0:
-        raise exceptions.NotNewHomeworksError(HW_MISSING_MSG)
+        return False
+    return homeworks[0].get('status')
 
 
-PRE_HW_STATUS_LOG_MSG = 'Статус проверки домашки прежний'
-CHECK_TOKENS_MISSING_MSG = 'Отсутствует необходимая переменная среды'
+CHECK_TOKENS_MISSING = 'Отсутствует необходимая переменная среды'
 
 
 def main():
     """Основная логика работы бота."""
     if not check_tokens():
-        raise ValueError(CHECK_TOKENS_MISSING_MSG)
+        raise ValueError(CHECK_TOKENS_MISSING)
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
     pre_status = None
@@ -167,21 +167,22 @@ def main():
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
-            is_homework(homeworks)
-            current_timestamp = response.get('current_date')
-            homework_status = homeworks[0].get('status')
-            if homework_status != pre_status:
+            homework_status = is_homework(homeworks)
+            if not homework_status:
+                send_message(bot, HW_MISSING)
+            elif homework_status != pre_status:
+                send_message(bot, parse_status(homeworks[0]))
                 pre_status = homework_status
-                message = parse_status(homeworks[0])
-                send_message(bot, message)
-            else:
-                logger.debug(PRE_HW_STATUS_LOG_MSG)
-
+                current_timestamp = response.get('current_date',
+                                                 current_timestamp)
         except Exception as error:
             message = str(error)
             if str(error) != pre_error:
-                pre_error = str(error)
-                send_message(bot, message)
+                try:
+                    send_message(bot, message)
+                    pre_error = str(error)
+                except exceptions.BotSendMessageError as bot_error:
+                    logger.error(bot_error)
             logger.error(error)
         finally:
             time.sleep(RETRY_TIME)
