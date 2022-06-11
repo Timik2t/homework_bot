@@ -84,7 +84,7 @@ def get_api_answer(current_timestamp):
 
 NOT_DICT = 'API вернул {response}, тип {type} не являющемся обьектом dict'
 NOT_LIST = 'API вернул {homeworks}, тип {type} не являющемся обьектом list'
-ENDPOINT_MISSING_ERROR = f'В ответе API нет ключа "homeworks"'
+ENDPOINT_MISSING_ERROR = 'В ответе API нет ключа "homeworks"'
 
 
 def check_response(response):
