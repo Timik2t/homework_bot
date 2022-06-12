@@ -40,50 +40,44 @@ def send_message(bot, message):
 SERVER_ERROR_INFORMATION = ['code', 'error']
 RESPONSE_ERROR = (
     'Cбой запроса: {error}, '
-    'параметры запроса: {endpoint}, {params}, {headers}'
+    'параметры запроса: {url}, {params}, {headers}'
 )
 SERVER_ERROR = (
-    'Cбой запроса: {error}, {key}, '
-    'параметры запроса: {endpoint}, {params}, {headers} '
+    'Ошибка ответа сервера: {error}, {key}, '
+    'параметры запроса: {url}, {params}, {headers} '
 )
 
 
 def get_api_answer(current_timestamp):
     """Запрос к API."""
-    timestamp = current_timestamp
-    params = {'from_date': timestamp}
+    params = {'from_date': current_timestamp}
+    request_params = dict(url=ENDPOINT, headers=HEADERS, params=params)
     try:
-        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+        response = requests.get(**request_params)
         # response.raise_for_status()
     except requests.exceptions.RequestException as error:
-        raise ValueError(RESPONSE_ERROR.format(
+        raise ConnectionError(RESPONSE_ERROR.format(
             error=error,
-            endpoint=ENDPOINT,
-            headers=HEADERS,
-            params=params)
+            **request_params)
         )
-    if response.status_code != OK:
-        raise ValueError(RESPONSE_ERROR.format(
+    if response.status_code == OK:
+        raise ConnectionError(RESPONSE_ERROR.format(
             error=response.status_code,
-            endpoint=ENDPOINT,
-            headers=HEADERS,
-            params=params)
+            **request_params)
         )
     api_answer = response.json()
     for key in SERVER_ERROR_INFORMATION:
         if key in api_answer:
             raise exceptions.InternalServerError(SERVER_ERROR.format(
                 key=key,
-                endpoint=ENDPOINT,
-                headers=HEADERS,
-                params=params,
-                error=api_answer[key]
+                error=api_answer[key],
+                **request_params
             ))
     return api_answer
 
 
-NOT_DICT = 'API вернул {response}, тип {type} не являющемся обьектом dict'
-NOT_LIST = 'API вернул {homeworks}, тип {type} не являющемся обьектом list'
+NOT_DICT = 'API вернул {type} не являющемся обьектом dict'
+NOT_LIST = 'API вернул {type} не являющемся обьектом list'
 ENDPOINT_MISSING_ERROR = 'В ответе API нет ключа "homeworks"'
 
 
@@ -91,7 +85,6 @@ def check_response(response):
     """Проверяет ответ API."""
     if not isinstance(response, dict):
         raise TypeError(NOT_DICT.format(
-            response=response,
             type=type(response)
         ))
     if "homeworks" not in response:
@@ -99,29 +92,28 @@ def check_response(response):
     homeworks = response['homeworks']
     if not isinstance(homeworks, list):
         raise TypeError(NOT_LIST.format(
-            homeworks=homeworks,
             type=type(homeworks)
         ))
     return homeworks
 
 
-HW_STATUS_MISSING = 'Неизвестный статус проверки: {response_ststus}'
+STATUS_MISSING = 'Неизвестный статус проверки: {response_status}'
 PARSE_STATUS = (
-    'Изменился статус проверки работы "{homework_name}". '
+    'Изменился статус проверки работы "{name}". '
     '{status}')
 
 
 def parse_status(homework):
     """Извлечение статуса домашки."""
-    homework_name = homework['homework_name']
-    homework_status = homework['status']
-    if homework_status not in VERDICTS:
+    name = homework['homework_name']
+    status = homework['status']
+    if status not in VERDICTS:
         raise ValueError(
-            HW_STATUS_MISSING.format(response_ststus=homework_status)
+            STATUS_MISSING.format(response_status=status)
         )
     return PARSE_STATUS.format(
-        homework_name=homework_name,
-        status=VERDICTS[homework_status]
+        name=name,
+        status=VERDICTS[status]
     )
 
 
@@ -131,27 +123,16 @@ TOKENS = ['TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID', 'PRACTICUM_TOKEN']
 
 def check_tokens():
     """Проверка переменных окружения."""
-    missing_tokens = []
-    for name in TOKENS:
-        if not globals()[name]:
-            missing_tokens.append(name)
-    if len(missing_tokens) != 0:
+    missing_tokens = [name for name in TOKENS if not globals()[name]]
+    if missing_tokens:
         logger.error(TOKENS_MISSING.format(name=missing_tokens))
         return False
     return True
 
 
-HW_MISSING = 'За последнее время нет домашек'
-
-
-def is_homework(homeworks):
-    """Проверка есть ли домашка."""
-    if len(homeworks) == 0:
-        return False
-    return homeworks[0].get('status')
-
-
 CHECK_TOKENS_MISSING = 'Отсутствует необходимая переменная среды'
+ERROR_MESSAGE = 'Сбой в работе: {error}'
+BOT_ERROR = 'Ошибка отправки сообщения в телеграмм'
 
 
 def main():
@@ -161,30 +142,30 @@ def main():
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
     pre_status = None
-    pre_error = None
+    pre_message = None
 
     while True:
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
-            homework_status = is_homework(homeworks)
-            if not homework_status and homework_status != pre_status:
-                send_message(bot, HW_MISSING)
-                pre_status = homework_status
-            elif homework_status != pre_status:
-                send_message(bot, parse_status(homeworks[0]))
-                pre_status = homework_status
-                current_timestamp = response.get('current_date',
-                                                 current_timestamp)
+            if not homeworks:
+                pass
+            else:
+                homework_status = homeworks[0].get('status')
+                if homework_status != pre_status:
+                    send_message(bot, parse_status(homeworks[0]))
+                    pre_status = homework_status
+                    current_timestamp = response.get('current_date',
+                                                     current_timestamp)
         except Exception as error:
-            message = str(error)
-            if str(error) != pre_error:
+            message = ERROR_MESSAGE.format(error=error)
+            if message != pre_message:
                 try:
                     send_message(bot, message)
-                    pre_error = str(error)
-                except exceptions.BotSendMessageError as bot_error:
-                    logger.error(bot_error)
-            logger.error(error)
+                    pre_message = message
+                except exceptions.BotSendMessageError:
+                    logger.error(BOT_ERROR)
+            logger.error(message)
         finally:
             time.sleep(RETRY_TIME)
 
