@@ -43,18 +43,20 @@ RESPONSE_ERROR = (
     'параметры запроса: {url}, {params}, {headers}'
 )
 SERVER_ERROR = (
-    'Ошибка ответа сервера: {error}, {key}, '
+    'Ошибка сервера: {error}, {key}, '
     'параметры запроса: {url}, {params}, {headers} '
 )
 
 
 def get_api_answer(current_timestamp):
     """Запрос к API."""
-    params = {'from_date': current_timestamp}
-    request_params = dict(url=ENDPOINT, headers=HEADERS, params=params)
+    request_params = dict(
+        url=ENDPOINT,
+        headers=HEADERS,
+        params={'from_date': current_timestamp}
+    )
     try:
         response = requests.get(**request_params)
-        # response.raise_for_status()
     except requests.exceptions.RequestException as error:
         raise ConnectionError(RESPONSE_ERROR.format(
             error=error,
@@ -77,7 +79,7 @@ def get_api_answer(current_timestamp):
 
 
 NOT_DICT = 'API вернул {type} не являющемся обьектом dict'
-NOT_LIST = 'API вернул {type} не являющемся обьектом list'
+NOT_LIST = 'API вернул список домашек тип {type} не являющийся обьектом list'
 ENDPOINT_MISSING_ERROR = 'В ответе API нет ключа "homeworks"'
 
 
@@ -117,7 +119,7 @@ def parse_status(homework):
     )
 
 
-TOKENS_MISSING = 'Отсутствует необходимая переменная среды {name}'
+TOKENS_MISSING = 'Отсутствуют необходимые переменные среды {names}'
 TOKENS = ['TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID', 'PRACTICUM_TOKEN']
 
 
@@ -125,12 +127,12 @@ def check_tokens():
     """Проверка переменных окружения."""
     missing_tokens = [name for name in TOKENS if not globals()[name]]
     if missing_tokens:
-        logger.error(TOKENS_MISSING.format(name=missing_tokens))
+        logger.error(TOKENS_MISSING.format(names=missing_tokens))
         return False
     return True
 
 
-CHECK_TOKENS_MISSING = 'Отсутствует необходимая переменная среды'
+CHECK_TOKENS_MISSING = 'Отсутствуют необходимые переменные среды'
 ERROR_MESSAGE = 'Сбой в работе: {error}'
 BOT_ERROR = 'Ошибка отправки сообщения в телеграмм'
 
@@ -149,23 +151,22 @@ def main():
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
             if not homeworks:
-                pass
-            else:
-                homework_status = homeworks[0].get('status')
-                if homework_status != pre_status:
-                    send_message(bot, parse_status(homeworks[0]))
-                    pre_status = homework_status
-                    current_timestamp = response.get('current_date',
-                                                     current_timestamp)
+                continue
+            homework_status = homeworks[0].get('status')
+            if homework_status != pre_status:
+                send_message(bot, parse_status(homeworks[0]))
+                pre_status = homework_status
+                current_timestamp = response.get('current_date',
+                                                 current_timestamp)
         except Exception as error:
             message = ERROR_MESSAGE.format(error=error)
             if message != pre_message:
+                logger.error(message)
                 try:
                     send_message(bot, message)
                     pre_message = message
                 except exceptions.BotSendMessageError:
                     logger.error(BOT_ERROR)
-            logger.error(message)
         finally:
             time.sleep(RETRY_TIME)
 
