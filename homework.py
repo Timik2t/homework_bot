@@ -60,7 +60,7 @@ def get_api_answer(current_timestamp):
             error=error,
             **request_params)
         )
-    if response.status_code == OK:
+    if response.status_code != OK:
         raise ConnectionError(RESPONSE_ERROR.format(
             error=response.status_code,
             **request_params)
