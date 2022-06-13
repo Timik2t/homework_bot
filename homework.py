@@ -160,8 +160,8 @@ def main():
                                                  current_timestamp)
         except Exception as error:
             message = ERROR_MESSAGE.format(error=error)
+            logger.error(message)
             if message != pre_message:
-                logger.error(message)
                 try:
                     send_message(bot, message)
                     pre_message = message
