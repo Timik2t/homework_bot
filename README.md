@@ -29,9 +29,7 @@ pip install -r requirements.txt
 ```
 3) Создайте чат-бота Телеграм
 4) Создайте в директории файл .env и поместите туда необходимые токены в формате 
->PRAKTIKUM_TOKEN = 'ххххххххх',
-
->TELEGRAM_TOKEN = 'ххххххххххх',
-
+>PRAKTIKUM_TOKEN = 'ххххххххх',  
+>TELEGRAM_TOKEN = 'ххххххххххх',  
 >TELEGRAM_CHAT_ID = ххххххххххх
 5) Откройте файл homework.py и запустите код
